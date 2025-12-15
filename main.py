@@ -6,34 +6,17 @@ from playwright.async_api import async_playwright
 import base64
 from jinja2 import Environment, BaseLoader
 
+from services.automation import HRMAutomation
+
 app = FastAPI()
 env = Environment(loader=BaseLoader())
-
-
-INDEX_HTML = """
-<!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>Playwright Crawler</title></head>
-  <body>
-    <h1>Playwright Crawler</h1>
-    <form method="post" action="/">
-      <label>URL: <input name="url" value="https://news.ycombinator.com" /></label>
-      <button type="submit">Crawl (UI)</button>
-    </form>
-    <p>Use the JSON API at <code>/api/crawl</code> with payload <code>{"url":"https://example.com"}</code></p>
-  </body>
-</html>
-"""
-
 
 class CrawlRequest(BaseModel):
     url: str
 
-
-@app.get("/", response_class=HTMLResponse)
-async def index():
-    return HTMLResponse(INDEX_HTML)
-
+class LoginData(BaseModel):
+    username: str
+    password: str
 
 @app.post("/api/crawl")
 async def api_crawl(req: CrawlRequest):
@@ -85,3 +68,12 @@ async def crawl_url(url: str) -> dict:
         "screenshot_base64": screenshot_base64,
         "links": links,
     }
+
+
+@app.post("/run-selenium")
+async def run_selenium_endpoint(data: LoginData):
+    automation = HRMAutomation(
+        username=data.username,
+        password=data.password,
+    )
+    return await automation.run_async()
