@@ -1,6 +1,37 @@
 import os
 from playwright.async_api import async_playwright
 
+import base64
+import requests
+import uuid
+
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GITHUB_REPO = os.getenv("GITHUB_REPO")
+GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
+
+def upload_to_github(local_path: str) -> str:
+    filename = f"{uuid.uuid4()}.png"
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/screenshots/{filename}"
+
+    with open(local_path, "rb") as f:
+        content = base64.b64encode(f.read()).decode()
+
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+    }
+
+    data = {
+        "message": f"Add screenshot {filename}",
+        "content": content,
+        "branch": GITHUB_BRANCH,
+    }
+
+    response = requests.put(api_url, headers=headers, json=data)
+    response.raise_for_status()
+
+    # Raw public URL
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/screenshots/{filename}"
 
 class HRMAutomation:
     def __init__(self, username, password, headless=True):
@@ -16,6 +47,7 @@ class HRMAutomation:
 
     async def run_async(self):
         screenshots_dir = "/tmp/screenshots"
+        git_dit = "screenshots"
         os.makedirs(screenshots_dir, exist_ok=True)
 
         try:
@@ -33,7 +65,9 @@ class HRMAutomation:
                 await page.goto("http://hrm.codebraininfotech.com/login")
 
                 # Screenshot before login
-                await page.screenshot(path=f"{screenshots_dir}/login_page.png")
+                login_path = f"{screenshots_dir}/login_page.png"
+                git_path = f"{git_dit}/login_page.png"
+                await page.screenshot(path=login_path)
 
                 await page.fill(f'xpath={self.username_xpath}', self.username)
                 await page.fill(f'xpath={self.password_xpath}', self.password)
@@ -44,17 +78,27 @@ class HRMAutomation:
                 )
 
                 # Screenshot after login
-                await page.screenshot(path=f"{screenshots_dir}/after_login.png")
+                after_login_path = f"{screenshots_dir}/after_login.png"
+                git_after_login_path = f"{git_dit}/login_page.png"
+                await page.screenshot(path=after_login_path)
 
                 await browser.close()
+
+                login_url = upload_to_github(git_path)
+                after_login_url = upload_to_github(git_after_login_path)
+
+
                 return {
                     "status": "success",
-                    "message": "Automation completed successfully. Screenshots saved."
+                    "message": "Automation completed successfully. Screenshots saved.",
+                    "login_screenshot_url": login_url,
+                    "after_login_screenshot_url": after_login_url,
                 }
 
         except Exception as e:
             try:
                 await page.screenshot(path=f"{screenshots_dir}/error.png")
+
             except:
                 pass
 
